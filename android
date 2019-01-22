@@ -1,0 +1,321 @@
+package com.example.administrator.smart_factory;
+
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Context;
+import android.os.Handler;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.io.OutputStream;
+import java.util.UUID;
+
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Context;
+import android.os.Handler;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.util.UUID;
+
+import static com.example.administrator.smart_factory.MainActivity.handler;
+
+
+public class MainActivity extends AppCompatActivity {
+    public static Button btn1, btn2, btn3; // Button 클레스를 전역 함수로 선언
+    public static TextView tv5,tv7; // TextView 클레스를 전역 함수로 선언
+    public static int red,blue; //int red,blue
+
+    private BluetoothAdapter mBtAdapter; //BluetoothAdapter 클레스를 전역 함수로 선언
+    private BluetoothSocket mSocket; //BluetoothSocket 클레스를 전역 함수로 선언
+    private static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); //블루투스 UUID 값
+    public static OutputStream mOutStream; //OutputStream 클레스를 전역 함수로 선언
+    public static Context mContext; //mContext 클레스를 전역 선언
+    public static Handler handler = new Handler(); //핸들러 클레스를 전역 선언
+    public static String Readmessage; //String 클레스를 전역 선언
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        //set Content View 앱에서 표시할 layout을 선택할 수 있는 함수 입니다.
+        setContentView(R.layout.activity_main);
+
+
+        // layout에서 배치한 Button과 textview를 각각 btn,tv 이라는 이름으로 선언 합니다. (findViewById : 메소드를 이용하여)
+        // 화면에 배치한 컴포넌트의 고유 ID 값을 찾아 선언할 수 있습니다.)
+        btn1 = (Button) findViewById(R.id.bt1); //연결
+        btn2 = (Button) findViewById(R.id.bt2); //연결끊기
+        btn3 = (Button) findViewById(R.id.bt3); //물품분류시작
+
+        tv5 = (TextView) findViewById(R.id.tv5); //양품
+        tv7 = (TextView) findViewById(R.id.tv7); //안내 메시지
+
+        //mBtAdapter 기본 설정으로 지정 후 BluetoothDevice 클레스를 mdevice로 선언 후
+        // EV3의 주소를 입력합니다. (각 EV3는 기기별로 고유의 주소 값을 가지고 있습니다.)
+        mBtAdapter = BluetoothAdapter.getDefaultAdapter();
+        final BluetoothDevice mdevice = mBtAdapter.getRemoteDevice("00:16:53:55:9B:13");
+
+        this.mContext = this; //mContext에 화면을 지정
+
+        //Button 클릭 Listener 작성
+        //Button 을 클릭하면 아래와 같은 동작을 합니다.
+        btn1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Button 을 클릭하면 EV3 와 연결을 합니다.
+                try {
+                    //블루투스 소켓 통신 활성화
+                    mSocket = mdevice.createRfcommSocketToServiceRecord(MY_UUID);
+                    mSocket.connect();
+                    Toast.makeText(getApplicationContext(), "연결성공", Toast.LENGTH_SHORT).show();
+                    //BluetoothSocket Read Class Thread 활성화
+                    BluetoothSocketRead SocketRead = new BluetoothSocketRead(mSocket); //읽기 클래스 동작 활성화
+                    mOutStream = mSocket.getOutputStream();
+                    SocketRead.start();
+                } catch (Exception e) {
+                    //연결 실패 시 메시지
+                    e.printStackTrace();
+                    Toast.makeText(getApplicationContext(), "연결실패", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        //Button 클릭 Listener 작성
+        btn2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Button 을 클릭하면 연결을 끊습니다.
+                try {
+                    mOutStream.close();
+                    mSocket.close();
+                } catch (IOException e) {
+                    //e.printStackTrace();
+                }
+            }
+        });
+
+        //Button 클릭 Listener 작성
+        btn3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Button 을 클릭하면 아래 입력한 소스가 실행됩니다.
+                //버튼이 클릭되었습니다, 라는 Toast Message 가 화면에 표시 됩니다.
+                Toast.makeText(getApplicationContext(), "물품 분류를 시작 합니다.", Toast.LENGTH_SHORT).show();
+                MessageSend("start" + "\n");
+            }
+        });
+    }
+
+    //메세지 전송 함수
+    //메세지를 Buff 형태로 전송 합니다. (EV3와 APP 메시지 송수신은 홀수의 문자 형태로 전송하여야 합니다.)
+    public void MessageSend(String message) {
+        try {
+            byte[] msgBuffer = message.getBytes();
+            mOutStream.write(msgBuffer); //출발 문자 전송
+            mOutStream.flush();
+            Toast.makeText(getApplicationContext(), "메시지 전송 성공", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(getApplicationContext(), "명령 송신 실패", Toast.LENGTH_SHORT).show();
+        }
+    }
+}
+
+class BluetoothSocketRead extends Thread {
+    public static InputStream mInputStream; //InputStream 클레스 선언
+    static BufferedReader br; //Buffered
+    static String message; // String Message 클레스 선언
+    public static BluetoothSocket mSocket; //소켓
+
+    public BluetoothSocketRead(BluetoothSocket Socket) {
+        mSocket = Socket;
+    }
+
+    //소켓 통신으로 날라온 문자를 Thread를 통하여 읽는다.
+
+    public void run() {
+        while (true) {
+            try {
+                mInputStream = mSocket.getInputStream();
+                br = new BufferedReader(new InputStreamReader(mInputStream, "euc-kr"), 1);
+                message = br.readLine();
+                if (message == null) {
+                    System.out.println("disConnect");
+                    break;
+                } else {
+                    MainActivity.Readmessage = message;
+                    execution(message);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    static public void execution(final String message) {
+        new Thread(new Runnable() {
+            public void run() {
+                handler.post(new Runnable() {
+                    public void run() {
+                        switch (message) {
+                            case "red": {
+                                MainActivity.red++;
+                                MainActivity.tv5.setText(" " + MainActivity.red);
+                                break;
+                            }
+
+                            default: {
+                                MainActivity.tv7.setText(message);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+}
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.example.ev3test.smart_factory_app.MainActivity">
+
+    <TextView
+        android:id="@+id/tv1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="스마트팩토리"
+        android:textColor="@android:color/black"
+        android:textSize="30sp" />
+
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/bt1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="연결"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/bt2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="연결끊기"
+            android:textSize="20sp" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/bt3"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="물품 분류 시작"
+            android:textSize="20sp" />
+
+
+    </LinearLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:orientation="horizontal"></LinearLayout>
+
+    <TextView
+        android:id="@+id/tv2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="물품 분류 현황"
+        android:textColor="@android:color/background_dark"
+        android:textSize="30sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv3"
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:text="양품"
+            android:textColor="@android:color/holo_blue_bright"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv5"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:text="0"
+            android:textSize="40sp" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv7"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="124dp"
+        android:orientation="horizontal"></LinearLayout>
+
+    <ImageView
+        android:id="@+id/iv"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        app:srcCompat="@mipmap/lgcns" />
+
+
+</LinearLayout>
+
